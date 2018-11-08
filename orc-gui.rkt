@@ -74,7 +74,7 @@
 (struct slime monster (sliminess)#:transparent)
 (struct brigand monster ()#:transparent)
 
-(define (start)
+(define (start-orc)
   (big-bang (initialize-orc-world)
     (on-key player-acts-on-monsters)
     (to-draw render-orc-battle)
@@ -86,7 +86,7 @@
   (orc-world player0 lom0 (random-number-of-attacks player0) 0))
 
 (define (end-of-orc-battle? w)
-  (or (win? ) (lose? w)))
+  (or (win? w) (lose? w)))
 
 (define (render-orc-battle w)
   (render-orc-world w (orc-world-target w) (instructions w)))
@@ -105,7 +105,7 @@
     [(key=? "right" k) (move-target w +1)]
     [(key=? "left" k) (move-target w -1)]
     [(key=? "down" k) (move-target w (+ PER-ROW))]
-    [(key=? "left" k) (move-target w (- PER-ROW))])
+    [(key=? "up" k) (move-target w (- PER-ROW))])
   (give-monster-turn-if-attack#=0 w)
   w)
 
@@ -123,24 +123,24 @@
   (add1 (random n)))
 
 (define (random- n)
-  (sub1 (random n)))
+  (- (add1 (random n))))
 
 (define (interval- n m (max-value 100))
   (min (max 0 (- n m)) max-value))
 
 (define (interval+ n m (max-value 100))
-  (interval+ n (- m) max-value))
+  (interval- n (- m) max-value))
 
 (define (initialize-monsters)
-  (build-list
-   MONSTER#
-   (lambda (_)
+  (define(create-monster _)
      (define health (random+ MONSTER-HEALTH0))
      (case (random 4)
        [(0) (orc ORC-IMAGE health (random+ CLUB-STRENGTH))]
        [(1) (hydra HYDRA-IMAGE health)]
        [(2) (slime SLIME-IMAGE health (random+ SLIMINESS))]
-       [(3) (brigand BRIGAND-IMAGE health)]))))
+       [(3) (brigand BRIGAND-IMAGE health)]
+       [else (error "can't happen")]))
+   (build-list MONSTER# create-monster))
     
 (define (stab-orc an-orc)
   (set-monster-health! an-orc (- (monster-health an-orc) STAB-DAMAGE)))
@@ -197,7 +197,7 @@
 (define (status-bar v-current v-max color label)
   (define w (* (/ v-current v-max) HEALTH-BAR-WIDTH))
   (define f (rectangle w HEALTH-BAR-HEIGHT 'solid color))
-  (define b ((rectangle HEALTH-BAR-WIDTH HEALTH-BAR-HEIGHT 'outline 'color)))
+  (define b (rectangle HEALTH-BAR-WIDTH HEALTH-BAR-HEIGHT 'outline color))
   (define bar (overlay/align "left" "top" f b))
   (beside bar H-SPACER (text label HEALTH-SIZE color)))
 
@@ -299,14 +299,13 @@
       [(slime? m)
        (player-health+ player -1)
        (player-agility+ player
-                        (random- (slime-sliminess monster)))]
+                        (random- (slime-sliminess m)))]
       [(brigand? m)
        (case (random 3)
          [(0) (player-health+ player HEALTH-DAMAGE)]
          [(1) (player-agility+ player AGILITY-DAMAGE)]
          [(2) (player-strength+ player STRENGTH-DAMAGE)])]))
-  (define live-monsters (filter monster-alive? lom))
-  (for-each one-monster-attacks-player live-monsters))
+  (for-each one-monster-attacks-player (filter monster-alive? lom)))
 
 
 ;                                          
@@ -339,7 +338,8 @@
   (define A-HYDRA (hydra 'image 2))
   (define A-BRIGAND (brigand 'image 3))
   
-  ;; testing move-target 
+  ;; testing move-target
+  
   
   (check-equal? (let ([w (orc-world 'dummy 'dummy 'dummy 0)])
                   (move-target w +1)
@@ -370,6 +370,7 @@
                 (first (orc-world-lom WORLD1)))
   
   ;; testing basic player manipulations
+  
   
   (check-equal? (let ([p (player 1 0 0)])
                   (player-health+ p 5)
@@ -413,6 +414,7 @@
   
   ;; Property:
   ;; the output will always be in [1, (/ X Y)]
+  
   (define (prop:rand-frac-range i)
     (test-begin 
      (for ([i (in-range i)])
@@ -423,6 +425,7 @@
   ;; Property: 
   ;; The number of the monsters in the list is equal to
   ;; MONSTER-NUM
+  
   (define (prop:monster-init-length i)
     (test-begin
      (for ([i (in-range i)])
@@ -432,6 +435,7 @@
   ;; Property: 
   ;; the player will have less points in at least one of its
   ;; fields
+  
   (define (prop:monster-attack-player-dec i)
     (test-begin
      (for ([i (in-range i)])
@@ -446,6 +450,7 @@
   ;; Property: 
   ;; If there are monster, then the player will 
   ;; have less points in at least one of its fields
+  
   (define (prop:monsters-attack-player-dec i)
     (test-begin 
      (for ([i (in-range i)])
@@ -463,6 +468,7 @@
   ;; [(sub1 (monster-health m)), 
   ;; (- (monster-health m) 
   ;;    (/ (player-strength (orc-world-player w)) 2))]
+  
   (define (prop:stab!-health i)
     (test-begin
      (for ([i (in-range i)])
@@ -481,6 +487,7 @@
             (add1 (random MAX-STRENGTH))))
   
   ;; testing initializers
+  
   (prop:monster-init-length 1000)
   (check-true (monster? (first (initialize-monsters))))
   (check-true (> 10 (monster-health (first (initialize-monsters)))))
@@ -556,7 +563,7 @@
                 MONSTER#)
   
   ;; testing game predicates
-  
+
   (check-false (lose? WORLD0))
   (check-true (lose? (orc-world (player 0 30 30) empty 0 0)))
   (check-true (all-dead? (list (orc 'image 0 0) (hydra 'image 0))))
@@ -573,7 +580,6 @@
   (check-false (monster-alive? (orc 'image 0 0)))
   
   ;; testing utilities 
-  
   (prop:rand-frac-range 1000)
   
-  "all tests run")
+  )
